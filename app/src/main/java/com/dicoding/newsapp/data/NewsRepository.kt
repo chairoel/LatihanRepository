@@ -17,19 +17,19 @@ class NewsRepository private constructor(
     private val newsDao: NewsDao,
     private val appExecutors: AppExecutors
 ) {
-    private val result = MediatorLiveData<Result<List<NewsEntity>>>()
+    private val result = MediatorLiveData<Result<List<NewsEntity>>>() //MediatorLiveData: ingin menggabungkan banyak sumber data dalam sebuah LiveData
 
     fun getHeadlineNews(): LiveData<Result<List<NewsEntity>>> {
-        result.value = Result.Loading
-        val client = apiService.getNews(BuildConfig.API_KEY)
+        result.value = Result.Loading //1. Inisiasi dengan status Loading.
+        val client = apiService.getNews(BuildConfig.API_KEY) //2. Mengambil dari network dengan ApiService.
         client.enqueue(object : Callback<NewsResponse> {
             override fun onResponse(call: Call<NewsResponse>, response: Response<NewsResponse>) {
-                if (response.isSuccessful) {
+                if (response.isSuccessful) { //3. Membaca data ketika response berhasil.
                     val articles = response.body()?.articles
                     val newsList = ArrayList<NewsEntity>()
                     appExecutors.diskIO.execute {
                         articles?.forEach { article ->
-                            val isBookmarked = newsDao.isNewsBookmarked(article.title)
+                            val isBookmarked = newsDao.isNewsBookmarked(article.title) //4. Mengecek apakah data yang ada sudah ada di dalam bookmark atau belum.
                             val news = NewsEntity(
                                 article.title,
                                 article.publishedAt,
@@ -37,19 +37,19 @@ class NewsRepository private constructor(
                                 article.url,
                                 isBookmarked
                             )
-                            newsList.add(news)
+                            newsList.add(news) //5. Mengubah data response menjadi entity sebelum dimasukkan ke dalam database.
                         }
-                        newsDao.deleteAll()
-                        newsDao.insertNews(newsList)
+                        newsDao.deleteAll() // 6. Menghapus semua data dari database yang tidak ditandai bookmark.
+                        newsDao.insertNews(newsList) //7. Memasukkan data baru dari internet ke dalam database.
                     }
                 }
             }
 
             override fun onFailure(call: Call<NewsResponse>, t: Throwable) {
-                result.value = Result.Error(t.message.toString())
+                result.value = Result.Error(t.message.toString()) //8. Memberi status jika terjadi eror.
             }
         })
-        val localData = newsDao.getNews()
+        val localData = newsDao.getNews() //9. Mengambil data dari database yang merupakan sumber utama untuk dikonsumsi dan memberi tanda sukses.
         result.addSource(localData) { newData: List<NewsEntity> ->
             result.value = Result.Success(newData)
         }
